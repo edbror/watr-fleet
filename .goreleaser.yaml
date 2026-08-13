@@ -1,0 +1,34 @@
+version: 2
+project_name: watr-fleet
+
+builds:
+  - main: .
+    binary: fleet
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    ldflags: ["-s -w"]
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+brews:
+  - name: watr-fleet
+    repository:
+      owner: edbror
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/edbror/watr-fleet
+    description: "A beautiful terminal dashboard for your fleet of AI coding agents"
+    dependencies:
+      - name: tmux
+    license: MIT
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^chore:"]

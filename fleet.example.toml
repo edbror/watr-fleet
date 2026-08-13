@@ -1,0 +1,22 @@
+# fleet.toml — put this at ~/.config/fleet/fleet.toml
+# Everything is optional; fleet works with zero config.
+
+# Register your own agents (or recolor built-ins).
+[agents.mybot]
+hex = "#FF00AA"
+aliases = ["mybot-cli"]
+
+# Override cost estimates (USD per million tokens) per model family.
+[pricing.sonnet]
+input = 3.0
+output = 15.0
+cache_read = 0.30
+cache_write = 3.75
+
+# Escalation when a session stays blocked.
+[notify]
+threshold_seconds = 30
+# ntfy.sh topic for phone push notifications (install the ntfy app):
+# ntfy_topic = "your-secret-topic"
+# Any shell command, e.g. a sound on macOS:
+# command = "afplay /System/Library/Sounds/Ping.aiff"
