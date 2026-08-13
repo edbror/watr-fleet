@@ -15,15 +15,32 @@ import (
 // the discovery layer; richer sources (Claude Code transcripts, hooks)
 // enrich its sessions through multiSource.
 type tmuxSource struct {
-	needsYouSince map[string]time.Time // target -> first time we saw it blocked
+	needsYouSince map[string]time.Time    // target -> first time we saw it blocked
+	activity      map[string]paneActivity // target -> content-change tracking
 }
+
+// paneActivity remembers what a pane looked like last poll. A pane whose
+// content stops changing is not working, no matter what old scrollback
+// says — spinners animate, idle sessions are static.
+type paneActivity struct {
+	hash       uint64
+	lastChange time.Time
+	seen       bool
+}
+
+// stableAfter is how long pane content must stay identical before a
+// marker-based "working" verdict is downgraded to idle.
+const stableAfter = 3 * time.Second
 
 // NewTmuxSource returns a Source backed by the local tmux server.
 func NewTmuxSource() (Source, error) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		return nil, fmt.Errorf("tmux not found in PATH: %w", err)
 	}
-	return &tmuxSource{needsYouSince: map[string]time.Time{}}, nil
+	return &tmuxSource{
+		needsYouSince: map[string]time.Time{},
+		activity:      map[string]paneActivity{},
+	}, nil
 }
 
 func (t *tmuxSource) Name() string { return "tmux" }
@@ -132,13 +149,62 @@ func detectorFor(agent fleet.Agent) detector {
 	return genericDetector
 }
 
-// statusOf infers a coarse status from the last lines of pane output.
+// statusOf infers status from pane output, cross-checked against real
+// activity: markers say what the agent CLAIMS, content change says what
+// it is actually DOING. Stale scrollback can no longer fake "working".
 func (t *tmuxSource) statusOf(target string, agent fleet.Agent) (fleet.Status, string) {
 	out, err := exec.Command("tmux", "capture-pane", "-p", "-t", target, "-S", "-25").Output()
 	if err != nil {
 		return fleet.StatusError, "cannot read pane"
 	}
-	return classify(string(out), agent)
+	status, lastLine := classify(string(out), agent)
+	stableFor, baseline := t.trackContent(target, string(out))
+	return reconcileWithActivity(status, stableFor, baseline), lastLine
+}
+
+// trackContent hashes the pane tail and reports how long it has been
+// unchanged, plus whether we have a baseline from a previous poll.
+func (t *tmuxSource) trackContent(target, tail string) (time.Duration, bool) {
+	h := fnv1a(tail)
+	act, seen := t.activity[target]
+	now := time.Now()
+	if !seen || h != act.hash {
+		t.activity[target] = paneActivity{hash: h, lastChange: now, seen: true}
+		return 0, seen
+	}
+	return now.Sub(act.lastChange), true
+}
+
+// reconcileWithActivity applies the ground truth of content change:
+//   - a "working" verdict on a pane that has been static beyond the
+//     threshold is stale scrollback → idle
+//   - an "idle" verdict on a pane whose content is actively changing is
+//     an agent streaming output without known markers → working
+//
+// Blocked and errored verdicts always stand: their screens ARE static.
+func reconcileWithActivity(status fleet.Status, stableFor time.Duration, baseline bool) fleet.Status {
+	switch status {
+	case fleet.StatusWorking:
+		if baseline && stableFor > stableAfter {
+			return fleet.StatusIdle
+		}
+	case fleet.StatusIdle:
+		if baseline && stableFor == 0 {
+			return fleet.StatusWorking
+		}
+	}
+	return status
+}
+
+// fnv1a hashes pane content for change detection.
+func fnv1a(s string) uint64 {
+	const offset, prime = 14695981039346656037, 1099511628211
+	h := uint64(offset)
+	for i := 0; i < len(s); i++ {
+		h ^= uint64(s[i])
+		h *= prime
+	}
+	return h
 }
 
 // classify applies the agent's detector to captured pane output.

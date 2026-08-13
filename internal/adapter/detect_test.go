@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"testing"
+	"time"
 
 	"github.com/edbror/watr-fleet/internal/fleet"
 )
@@ -44,6 +45,34 @@ func TestClassifyIdleFallback(t *testing.T) {
 	status, _ := classify(pane, fleet.AgentGrok)
 	if status != fleet.StatusIdle {
 		t.Errorf("status = %s, want idle", status)
+	}
+}
+
+func TestReconcileDowngradesStaleWorking(t *testing.T) {
+	// Old "✻ Pondering…" in scrollback, but the pane hasn't changed in a
+	// while: the session is idle, not working.
+	got := reconcileWithActivity(fleet.StatusWorking, 5*time.Second, true)
+	if got != fleet.StatusIdle {
+		t.Errorf("static working pane = %s, want idle", got)
+	}
+	// A genuinely animating pane keeps its working status.
+	if got := reconcileWithActivity(fleet.StatusWorking, 0, true); got != fleet.StatusWorking {
+		t.Errorf("changing working pane = %s, want working", got)
+	}
+	// First poll has no baseline: trust the markers, don't downgrade.
+	if got := reconcileWithActivity(fleet.StatusWorking, 0, false); got != fleet.StatusWorking {
+		t.Errorf("first-poll working pane = %s, want working", got)
+	}
+}
+
+func TestReconcileUpgradesActiveIdle(t *testing.T) {
+	// No known markers but the pane is streaming output: that is work.
+	if got := reconcileWithActivity(fleet.StatusIdle, 0, true); got != fleet.StatusWorking {
+		t.Errorf("changing idle pane = %s, want working", got)
+	}
+	// Blocked screens are static by nature — never touched.
+	if got := reconcileWithActivity(fleet.StatusNeedsYou, 10*time.Second, true); got != fleet.StatusNeedsYou {
+		t.Errorf("blocked pane = %s, want needs you", got)
 	}
 }
 

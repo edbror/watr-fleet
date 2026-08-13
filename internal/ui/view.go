@@ -13,7 +13,7 @@ import (
 // detail card, and a full-width segmented status bar. Hierarchy from
 // color fields and spacing, not from boxing every section.
 
-const version = "v0.10"
+const version = "v0.10.1"
 
 const (
 	colAgent = 10 // pill: space + 8 name + space
