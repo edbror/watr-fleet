@@ -1,4 +1,4 @@
-fleet
-fleet-*
+/fleet
+/fleet-*
 dist/
 *.zip
