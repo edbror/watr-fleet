@@ -155,10 +155,23 @@ func (c *claudeSource) sessionFromTranscript(path string, blocked map[string]tim
 		LastEvent:     event,
 		Tokens:        sum.totals.total(),
 		CostUSD:       sum.cost,
-		ContextPct:    clamp01(float64(sum.lastUsage.contextSize()) / float64(c.contextMax)),
+		ContextPct:    clamp01(float64(sum.lastUsage.contextSize()) / float64(c.contextWindow(sum.lastUsage.contextSize()))),
 		NeedsYouSince: since,
 		Dir:           sum.cwd,
 	}, true
+}
+
+// contextWindow picks the assumed window for a session. A context clearly
+// past the configured window (25% margin absorbs output overshoot on a
+// genuinely full window) can only belong to a long-context model (Sonnet
+// 1M): grading those against 200k pegs every gauge at 100%, which turns
+// the roster into a wall of identical readings.
+func (c *claudeSource) contextWindow(size int) int {
+	const longContext = 1_000_000
+	if size > c.contextMax+c.contextMax/4 {
+		return longContext
+	}
+	return c.contextMax
 }
 
 // summarize parses a transcript, reusing the cached pass when the file

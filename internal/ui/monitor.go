@@ -161,8 +161,8 @@ func (m Model) paintVessels(c [][]mcell) {
 func (m Model) paintHUD(c [][]mcell) {
 	sum := fleet.Summarize(m.sessions)
 	burn := m.burnPerMinute()
-	readout := fmt.Sprintf(" %s tok │ $%.2f │ %s/min │ %s ",
-		compactInt(sum.Tokens), sum.CostUSD, compactInt(burn), throughputLabel(burn))
+	readout := fmt.Sprintf(" %s tok │ %s │ %s/min │ %s ",
+		compactInt(sum.Tokens), costLabel(sum.CostUSD), compactInt(burn), throughputLabel(burn))
 	writeString(c, 0, 3, readout, colCyan)
 	if sum.NeedsYou > 0 {
 		alert := fmt.Sprintf(" ⚠ %d NEED YOU ", sum.NeedsYou)
@@ -175,15 +175,41 @@ func (m Model) paintHUD(c [][]mcell) {
 }
 
 // paintLegend draws the vessel roster on the right: color, name, context.
+// The panel rectangle is wiped first so waves and shimmer never wash
+// through the text, attention sorts to the top, and a fleet larger than
+// the panel ends in a "+N more" line instead of silently vanishing.
 func (m Model) paintLegend(c [][]mcell) {
 	ships := append([]fleet.Session(nil), m.sessions...)
-	sort.Slice(ships, func(i, j int) bool { return ships[i].Project < ships[j].Project })
-	x := len(c[0]) - legendWidth
-	writeString(c, 2, x, "VESSELS", darken(colInk, 0.2))
-	for i, s := range ships {
-		if 4+i >= len(c)-2 {
-			break
+	sort.SliceStable(ships, func(i, j int) bool {
+		ri, rj := legendRank(ships[i].Status), legendRank(ships[j].Status)
+		if ri != rj {
+			return ri > rj
 		}
+		return ships[i].Project < ships[j].Project
+	})
+	h, w := len(c), len(c[0])
+	capacity := h - 6
+	if capacity < 1 {
+		return
+	}
+	shown, more := len(ships), 0
+	if shown > capacity {
+		shown = capacity - 1
+		more = len(ships) - shown
+	}
+	rows := shown
+	if more > 0 {
+		rows++
+	}
+	// Wipe the roster panel: the sea stays out of the text.
+	for y := 1; y <= clampInt(4+rows, 1, h-2); y++ {
+		for x := maxInt(w-legendWidth-2, 1); x <= w-2; x++ {
+			c[y][x] = mcell{' ', ""}
+		}
+	}
+	x := w - legendWidth
+	writeString(c, 2, x, "VESSELS", darken(colInk, 0.2))
+	for i, s := range ships[:shown] {
 		ctx := "  —"
 		if s.ContextPct >= 0 {
 			ctx = fmt.Sprintf("%3.0f%%", s.ContextPct*100)
@@ -194,6 +220,24 @@ func (m Model) paintLegend(c [][]mcell) {
 			hex = colAmber
 		}
 		writeString(c, 3+i, x, row, hex)
+	}
+	if more > 0 {
+		writeString(c, 3+shown, x, fmt.Sprintf("  +%d more…", more), darken(colInk, 0.2))
+	}
+}
+
+// legendRank orders the roster by who deserves eyes first: blocked, then
+// errored, then working, then idle.
+func legendRank(s fleet.Status) int {
+	switch s {
+	case fleet.StatusNeedsYou:
+		return 3
+	case fleet.StatusError:
+		return 2
+	case fleet.StatusWorking:
+		return 1
+	default:
+		return 0
 	}
 }
 

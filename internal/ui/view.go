@@ -13,7 +13,7 @@ import (
 // detail card, and a full-width segmented status bar. Hierarchy from
 // color fields and spacing, not from boxing every section.
 
-const version = "v0.10.1"
+const version = "v0.10.2"
 
 const (
 	colAgent = 10 // pill: space + 8 name + space
@@ -399,20 +399,49 @@ func tokensLabel(tokens int) string {
 }
 
 func costLabel(cost float64) string {
-	if cost == 0 {
+	switch {
+	case cost == 0:
 		return "—"
+	case cost >= 1_000:
+		// Past a grand, cents are noise: $31,834 reads, $31834.22 alarms.
+		return "$" + groupThousands(int(cost+0.5))
+	default:
+		return fmt.Sprintf("$%.2f", cost)
 	}
-	return fmt.Sprintf("$%.2f", cost)
 }
 
 func compactInt(n int) string {
 	switch {
+	case n >= 1_000_000_000:
+		return fmt.Sprintf("%.2fB", float64(n)/1_000_000_000)
+	case n >= 100_000_000:
+		return fmt.Sprintf("%.0fM", float64(n)/1_000_000)
 	case n >= 1_000_000:
 		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
 	case n >= 1_000:
 		return fmt.Sprintf("%.0fk", float64(n)/1_000)
 	}
 	return fmt.Sprint(n)
+}
+
+// groupThousands renders 31834 as "31,834".
+func groupThousands(n int) string {
+	s := fmt.Sprint(n)
+	if n < 0 || len(s) <= 3 {
+		return s
+	}
+	var b strings.Builder
+	pre := len(s) % 3
+	if pre > 0 {
+		b.WriteString(s[:pre])
+	}
+	for i := pre; i < len(s); i += 3 {
+		if b.Len() > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(s[i : i+3])
+	}
+	return b.String()
 }
 
 func humanDuration(d time.Duration) string {
