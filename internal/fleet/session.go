@@ -49,8 +49,9 @@ type Session struct {
 	CostUSD       float64
 	ContextPct    float64 // context-window pressure, 0..1; negative means unknown
 	NeedsYouSince time.Time
-	Target        string // tmux target ("session:window.pane") for jumping
-	Dir           string // working directory; correlation key across sources
+	LastActive    time.Time // when the session's output last changed; zero means unknown
+	Target        string    // tmux target ("session:window.pane") for jumping
+	Dir           string    // working directory; correlation key across sources
 }
 
 // WaitingFor reports how long the session has been blocked on a human.

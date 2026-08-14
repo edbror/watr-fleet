@@ -115,46 +115,124 @@ func (m Model) paintWaves(c [][]mcell) {
 	}
 }
 
+// The open sea is a living chart, Gestaltung style: every visual channel
+// carries a variable. Hull size = total tokens (log tiers), drift speed
+// and glow = recency of output (half-life decay), wake length = speed.
+const cruiseSpeed = 0.5 // cells per animation frame at full activity
+
+// driftSpeed maps how long a session has been silent to horizontal
+// velocity. Fresh wakes race; dormant hulls barely hold steerage way.
+func driftSpeed(idle time.Duration, unknown bool) float64 {
+	const halfLifeSeconds, floor = 90.0, 0.05
+	if unknown {
+		return cruiseSpeed * floor
+	}
+	if idle < 0 {
+		idle = 0
+	}
+	f := math.Pow(0.5, idle.Seconds()/halfLifeSeconds)
+	if f < floor {
+		f = floor
+	}
+	return cruiseSpeed * f
+}
+
+// activityDim converts the same recency signal into brightness: recently
+// active vessels burn full brand color, dormant ones fade toward the sea.
+func activityDim(idle time.Duration, unknown bool) float64 {
+	return (1 - driftSpeed(idle, unknown)/cruiseSpeed) * 0.55
+}
+
+// shipHull picks the hull for a token magnitude: quick errands are dinghies,
+// hundred-million-token voyages are capital ships.
+func shipHull(tokens int) []rune {
+	switch {
+	case tokens >= 50_000_000:
+		return []rune{'◢', '▲', '◣'}
+	case tokens >= 1_000_000:
+		return []rune{'▲'}
+	default:
+		return []rune{'▴'}
+	}
+}
+
+// advanceVoyage integrates each vessel's drift phase once per animation
+// frame; integration keeps speed changes smooth instead of teleporting.
+func (m *Model) advanceVoyage() {
+	now := time.Now()
+	for _, s := range m.sessions {
+		if _, ok := m.voyage[s.ID]; !ok {
+			m.voyage[s.ID] = float64(hashString(s.ID) % 4096)
+		}
+		m.voyage[s.ID] += driftSpeed(now.Sub(s.LastActive), s.LastActive.IsZero())
+	}
+}
+
 // paintVessels places one ship per session on the surface wave, bobbing,
 // with status regalia: pulsing amber flag when blocked, red cross on error.
 func (m Model) paintVessels(c [][]mcell) {
 	h, w := len(c), len(c[0])
 	ships := append([]fleet.Session(nil), m.sessions...)
-	sort.Slice(ships, func(i, j int) bool { return ships[i].Project < ships[j].Project })
 	if len(ships) == 0 {
 		return
 	}
-	left, right := 4, w-legendWidth-4
-	span := maxInt(right-left, 1)
+	now := time.Now()
+	speed := func(s fleet.Session) float64 {
+		return driftSpeed(now.Sub(s.LastActive), s.LastActive.IsZero())
+	}
+	// Slow, dim hulls paint first: fresh vessels sail over dormant ones.
+	sort.SliceStable(ships, func(i, j int) bool { return speed(ships[i]) < speed(ships[j]) })
+	left, right := 4, w-legendWidth-6
+	span := maxInt(right-left, 8)
 	for i, s := range ships {
-		x := left + span/2
-		if len(ships) > 1 {
-			x = left + i*span/(len(ships)-1)
+		phase, ok := m.voyage[s.ID]
+		if !ok {
+			phase = float64(hashString(s.ID) % 4096)
 		}
+		x := left + int(math.Mod(phase, float64(span)))
 		bob := int(math.Round(math.Sin(float64(m.frame)/4.0+float64(i)*1.3) * 1.2))
-		y := m.waveY(0, x, h) - 1 + bob
-		y = clampInt(y, 3, h-3)
+		y := clampInt(m.waveY(0, x, h)-1+bob, 3, h-3)
+		hull := shipHull(s.Tokens)
 		hex := fleet.HexFor(s.Agent)
-		c[y][x] = mcell{'▲', hex}
-		if x+1 < w-1 {
-			c[y][x+1] = mcell{'▸', darken(hex, 0.3)} // heading: always making way
+		dim := activityDim(now.Sub(s.LastActive), s.LastActive.IsZero())
+		for k, r := range hull {
+			if x+k < w-1 {
+				c[y][x+k] = mcell{r, darken(hex, dim)}
+			}
 		}
+		if bow := x + len(hull); bow < w-1 {
+			c[y][bow] = mcell{'▸', darken(hex, 0.3+dim*0.5)}
+		}
+		// The wake trails proportionally to speed: fast vessels tear water.
+		for k := 1; k <= int(speed(s)/cruiseSpeed*4); k++ {
+			if wx := x - k - (m.frame/2+k)%2; wx > 0 && y+1 < h-1 {
+				c[y+1][wx] = mcell{'·', darken(colCyan, 0.25+float64(k)*0.12)}
+			}
+		}
+		mast := x + len(hull)/2
 		switch s.Status {
 		case fleet.StatusNeedsYou:
 			flag := colAmber
 			if m.frame%6 < 3 {
 				flag = colAmberHi
 			}
-			c[y-1][x] = mcell{'⚑', flag}
+			c[y-1][mast] = mcell{'⚑', flag}
 		case fleet.StatusError:
-			c[y-1][x] = mcell{'✕', colRed}
-		case fleet.StatusWorking:
-			wake := (m.frame / 2) % 3
-			if x-1-wake > 0 {
-				c[y+1][x-1-wake] = mcell{'·', darken(colCyan, 0.3)}
-			}
+			c[y-1][mast] = mcell{'✕', colRed}
 		}
 	}
+}
+
+// hashString gives each vessel a stable berth on the sea, independent of
+// roster order: re-sorts must not teleport ships.
+func hashString(s string) uint64 {
+	const offset, prime = 14695981039346656037, 1099511628211
+	h := uint64(offset)
+	for i := 0; i < len(s); i++ {
+		h ^= uint64(s[i])
+		h *= prime
+	}
+	return h
 }
 
 // paintHUD writes the big readouts along the top edge.

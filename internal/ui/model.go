@@ -49,8 +49,9 @@ type Model struct {
 	width    int
 	height   int
 
-	prevTokens map[string]int   // session ID -> tokens at last snapshot
-	activity   map[string][]int // session ID -> recent activity samples
+	prevTokens map[string]int     // session ID -> tokens at last snapshot
+	activity   map[string][]int   // session ID -> recent activity samples
+	voyage     map[string]float64 // session ID -> drift phase on the open sea
 
 	dashboard  bool  // 'd' toggles the htop-style dashboard view
 	fleetTotal int   // total tokens at last snapshot
@@ -79,6 +80,7 @@ func NewModel(source adapter.Source, refresh time.Duration) Model {
 		refresh:    refresh,
 		prevTokens: map[string]int{},
 		activity:   map[string][]int{},
+		voyage:     map[string]float64{},
 		notified:   map[string]bool{},
 	}
 }
@@ -120,6 +122,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 	case animTickMsg:
 		m.frame++
+		m.advanceVoyage()
 		if m.flashFrames > 0 {
 			m.flashFrames--
 			if m.flashFrames == 0 {
@@ -252,6 +255,7 @@ func (m *Model) pruneVanished() {
 		if !alive[id] {
 			delete(m.prevTokens, id)
 			delete(m.activity, id)
+			delete(m.voyage, id)
 			delete(m.notified, id)
 		}
 	}

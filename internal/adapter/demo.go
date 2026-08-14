@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 
@@ -58,25 +59,38 @@ func (d *demoFleet) initialSessions() []fleet.Session {
 	}
 	sessions := make([]fleet.Session, 0, len(seeds))
 	for i, s := range seeds {
+		// Log-uniform token spread (60k .. ~150M): real fleets mix quick
+		// errands with month-long voyages, and vessel size shows it.
+		tokens := int(60_000 * math.Pow(10, d.rng.Float64()*3.4))
 		sessions = append(sessions, fleet.Session{
 			ID:         fmt.Sprintf("s%02d", i+1),
 			Project:    s.project,
 			Agent:      s.agent,
 			Status:     fleet.StatusWorking,
 			LastEvent:  s.event,
-			Tokens:     20_000 + d.rng.Intn(400_000),
-			CostUSD:    0.4 + d.rng.Float64()*7,
+			Tokens:     tokens,
+			CostUSD:    float64(tokens) / 1_000_000 * (1.5 + d.rng.Float64()*2.5),
 			ContextPct: 0.1 + d.rng.Float64()*0.5,
+			LastActive: time.Now(),
 			Target:     fmt.Sprintf("demo:%d.0", i),
 		})
 	}
 	// Guarantee an interesting opening frame: someone always needs you.
 	sessions[3].Status = fleet.StatusNeedsYou
 	sessions[3].NeedsYouSince = time.Now().Add(-4 * time.Minute)
+	sessions[3].LastActive = sessions[3].NeedsYouSince
 	sessions[3].LastEvent = "approve: run db migration?"
 	sessions[4].Status = fleet.StatusNeedsYou
 	sessions[4].NeedsYouSince = time.Now().Add(-40 * time.Second)
+	sessions[4].LastActive = sessions[4].NeedsYouSince
 	sessions[4].LastEvent = "choose tone: formal or playful?"
+	// And dormant vessels: old wakes, drifting slow and dim.
+	sessions[7].Status = fleet.StatusIdle
+	sessions[7].LastActive = time.Now().Add(-12 * time.Minute)
+	sessions[7].LastEvent = "shipped; standing by"
+	sessions[10].Status = fleet.StatusIdle
+	sessions[10].LastActive = time.Now().Add(-28 * time.Minute)
+	sessions[10].LastEvent = "awaiting next assignment"
 	return sessions
 }
 
@@ -87,6 +101,7 @@ func (d *demoFleet) evolve(s *fleet.Session) {
 		s.Tokens += d.rng.Intn(2_500)
 		s.CostUSD += d.rng.Float64() * 0.03
 		s.ContextPct = clamp01(s.ContextPct + d.rng.Float64()*0.01)
+		s.LastActive = time.Now() // streaming: the wake stays fresh
 		if d.rng.Float64() < 0.04 {
 			s.Status = fleet.StatusNeedsYou
 			s.NeedsYouSince = time.Now()
@@ -101,11 +116,13 @@ func (d *demoFleet) evolve(s *fleet.Session) {
 		if d.rng.Float64() < 0.06 {
 			s.Status = fleet.StatusWorking
 			s.NeedsYouSince = time.Time{}
+			s.LastActive = time.Now()
 			s.LastEvent = pick(d.rng, workingEvents)
 		}
 	case fleet.StatusIdle:
 		if d.rng.Float64() < 0.05 {
 			s.Status = fleet.StatusWorking
+			s.LastActive = time.Now()
 			s.LastEvent = pick(d.rng, workingEvents)
 		}
 	case fleet.StatusError:

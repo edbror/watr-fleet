@@ -48,6 +48,34 @@ func TestClassifyIdleFallback(t *testing.T) {
 	}
 }
 
+func TestClassifyIgnoresScrollbackError(t *testing.T) {
+	// "error:" high in the scrollback is a coding session doing its job —
+	// only the bottom of the pane can declare the CLI itself dead.
+	pane := `
+error: cannot find module 'left-pad'
+  at require (node:internal/modules)
+
+fixed! rebuilding now
+build ok
+tests passing
+all green
+$ `
+	status, _ := classify(pane, fleet.Agent("codex"))
+	if status == fleet.StatusError {
+		t.Errorf("scrollback error text classified as errored")
+	}
+}
+
+func TestClassifyBottomErrorStillCounts(t *testing.T) {
+	pane := `
+doing things
+rate limit reached, try again later`
+	status, _ := classify(pane, fleet.AgentGrok)
+	if status != fleet.StatusError {
+		t.Errorf("status = %s, want error for bottom-line failure", status)
+	}
+}
+
 func TestReconcileDowngradesStaleWorking(t *testing.T) {
 	// Old "✻ Pondering…" in scrollback, but the pane hasn't changed in a
 	// while: the session is idle, not working.
@@ -73,6 +101,17 @@ func TestReconcileUpgradesActiveIdle(t *testing.T) {
 	// Blocked screens are static by nature — never touched.
 	if got := reconcileWithActivity(fleet.StatusNeedsYou, 10*time.Second, true); got != fleet.StatusNeedsYou {
 		t.Errorf("blocked pane = %s, want needs you", got)
+	}
+}
+
+func TestReconcileErrorOnStreamingPaneIsWorking(t *testing.T) {
+	// Error text flowing through an actively streaming pane is a healthy
+	// session at work; a genuinely dead CLI's screen is static.
+	if got := reconcileWithActivity(fleet.StatusError, 0, true); got != fleet.StatusWorking {
+		t.Errorf("streaming errored pane = %s, want working", got)
+	}
+	if got := reconcileWithActivity(fleet.StatusError, 10*time.Second, true); got != fleet.StatusError {
+		t.Errorf("static errored pane = %s, want error", got)
 	}
 }
 

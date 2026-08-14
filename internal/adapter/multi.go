@@ -82,6 +82,9 @@ func enrich(base, extra fleet.Session) fleet.Session {
 		base.Status = extra.Status
 		base.NeedsYouSince = extra.NeedsYouSince
 	}
+	if extra.LastActive.After(base.LastActive) {
+		base.LastActive = extra.LastActive
+	}
 	if base.Target == "" {
 		base.Target = extra.Target
 	}

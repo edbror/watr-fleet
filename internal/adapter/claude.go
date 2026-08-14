@@ -157,6 +157,7 @@ func (c *claudeSource) sessionFromTranscript(path string, blocked map[string]tim
 		CostUSD:       sum.cost,
 		ContextPct:    clamp01(float64(sum.lastUsage.contextSize()) / float64(c.contextWindow(sum.lastUsage.contextSize()))),
 		NeedsYouSince: since,
+		LastActive:    info.ModTime(),
 		Dir:           sum.cwd,
 	}, true
 }

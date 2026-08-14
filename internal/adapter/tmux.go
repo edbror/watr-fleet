@@ -92,6 +92,9 @@ func (t *tmuxSource) paneToSession(line string, tree processTree) (fleet.Session
 		Dir:        parts[4],
 	}
 	t.trackBlockedTime(&session)
+	if act, ok := t.activity[target]; ok {
+		session.LastActive = act.lastChange
+	}
 	return session, true
 }
 
@@ -180,15 +183,18 @@ func (t *tmuxSource) trackContent(target, tail string) (time.Duration, bool) {
 //     threshold is stale scrollback → idle
 //   - an "idle" verdict on a pane whose content is actively changing is
 //     an agent streaming output without known markers → working
+//   - an "errored" verdict on a pane that is actively streaming is error
+//     text passing through a healthy session → working; a dead CLI's
+//     screen is static
 //
-// Blocked and errored verdicts always stand: their screens ARE static.
+// Blocked verdicts always stand: a permission prompt IS a static screen.
 func reconcileWithActivity(status fleet.Status, stableFor time.Duration, baseline bool) fleet.Status {
 	switch status {
 	case fleet.StatusWorking:
 		if baseline && stableFor > stableAfter {
 			return fleet.StatusIdle
 		}
-	case fleet.StatusIdle:
+	case fleet.StatusIdle, fleet.StatusError:
 		if baseline && stableFor == 0 {
 			return fleet.StatusWorking
 		}
@@ -207,6 +213,12 @@ func fnv1a(s string) uint64 {
 	return h
 }
 
+// errorScopeLines bounds the error check to the bottom of the pane. A
+// crashed CLI or rate-limit banner sits at the bottom; "error:" higher up
+// is just a coding session doing its job (compilers, tests, the agent
+// quoting an error it already fixed) and must not paint the vessel red.
+const errorScopeLines = 5
+
 // classify applies the agent's detector to captured pane output.
 func classify(paneTail string, agent fleet.Agent) (fleet.Status, string) {
 	tail := strings.TrimSpace(paneTail)
@@ -215,13 +227,25 @@ func classify(paneTail string, agent fleet.Agent) (fleet.Status, string) {
 	switch {
 	case d.needsYou.MatchString(tail):
 		return fleet.StatusNeedsYou, lastLine
-	case d.errored.MatchString(tail):
+	case d.errored.MatchString(bottomLines(tail, errorScopeLines)):
 		return fleet.StatusError, lastLine
 	case d.working.MatchString(tail):
 		return fleet.StatusWorking, lastLine
 	default:
 		return fleet.StatusIdle, lastLine
 	}
+}
+
+// bottomLines returns the last n non-empty lines of text.
+func bottomLines(text string, n int) string {
+	lines := strings.Split(text, "\n")
+	var kept []string
+	for i := len(lines) - 1; i >= 0 && len(kept) < n; i-- {
+		if strings.TrimSpace(lines[i]) != "" {
+			kept = append([]string{lines[i]}, kept...)
+		}
+	}
+	return strings.Join(kept, "\n")
 }
 
 func lastNonEmptyLine(text string) string {
