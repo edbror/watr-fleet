@@ -68,8 +68,8 @@ func (m Model) paintFrame(c [][]mcell) {
 	}
 	c[0][0], c[0][w-1] = mcell{'╭', edge}, mcell{'╮', edge}
 	c[h-1][0], c[h-1][w-1] = mcell{'╰', edge}, mcell{'╯', edge}
-	// Sparse drifting stars above the waterline.
-	for y := 1; y < h*45/100; y++ {
+	// Sparse drifting stars, sky only: everything below the horizon is sea.
+	for y := 1; y < horizonRow(h); y++ {
 		for x := 1; x < w-1; x++ {
 			if (x*7+y*13+m.frame/6)%97 == 0 {
 				c[y][x] = mcell{'·', darken(colBright, 0.55)}
@@ -78,37 +78,57 @@ func (m Model) paintFrame(c [][]mcell) {
 	}
 }
 
-// waveY returns the surface height of wave layer k at column x. Amplitude
-// breathes with the fleet's real burn rate.
-func (m Model) waveY(k, x, h int) int {
-	energy := 1.0 + math.Min(float64(m.burnPerMinute())/1_500_000.0, 1.0)*1.6
-	base := float64(h)*0.52 + float64(k)*2.6
-	amp := (1.1 + float64(k)*0.7) * energy
-	wavelength := 16.0 + float64(k)*7.0
-	phase := float64(m.frame) / (7.0 - float64(k)*1.5)
-	y := base + amp*math.Sin(2*math.Pi*float64(x)/wavelength+phase)
-	return int(y)
+// The sea is drawn in perspective: a horizon high on the canvas and water
+// filling the whole plane below it. Depth carries data like every other
+// channel — far means silent, near means alive.
+func horizonRow(h int) int { return maxInt(h*30/100, 2) }
+func shoreRow(h int) int   { return h - 4 }
+
+// perspectiveRow projects depth z (0 = at the viewer's feet, 1 = horizon)
+// onto a canvas row; the easing bunches far rows against the horizon the
+// way distance compresses the real sea.
+func perspectiveRow(z float64, h int) float64 {
+	top, bottom := float64(horizonRow(h))+1, float64(shoreRow(h))
+	return top + math.Pow(1-z, 1.6)*(bottom-top)
 }
 
-// paintWaves draws three parallax water layers plus depth shimmer.
+// paintWaves fills the whole plane below the horizon with parallax water:
+// far layers short, dim and slow against the horizon; near layers wide,
+// bright and fast at the viewer's feet. Amplitude breathes with real burn.
 func (m Model) paintWaves(c [][]mcell) {
 	h, w := len(c), len(c[0])
-	glyphs := []rune{'≈', '~', '≈'}
-	for k := 2; k >= 0; k-- {
+	top := horizonRow(h)
+	if shoreRow(h) <= top {
+		return
+	}
+	layers := clampInt(h/8, 3, 6)
+	energy := 1.0 + math.Min(float64(m.burnPerMinute())/1_500_000.0, 1.0)*0.6
+	glyphs := []rune{'≈', '~'}
+	for k := 0; k < layers; k++ { // horizon first, near water paints over
+		z := 1.0
+		if layers > 1 {
+			z = 1.0 - float64(k)/float64(layers-1) // 1 = horizon, 0 = near
+		}
+		// Gentle rolling swell: amplitude grows toward the viewer but the
+		// wavelength grows faster, so the sea never turns into mountains.
+		amp := (0.4 + (1-z)*1.4) * energy
+		wavelength := 14.0 + (1-z)*34.0
+		phase := float64(m.frame) / (9.0 - (1-z)*4.5)
 		for x := 1; x < w-1; x++ {
-			y := m.waveY(k, x, h)
-			if y <= 1 || y >= h-1 {
+			base := perspectiveRow(z, h)
+			y := int(base + amp*math.Sin(2*math.Pi*float64(x)/wavelength+phase))
+			if y <= top || y >= h-1 {
 				continue
 			}
 			t := fold(floatMod(float64(x)/30.0+float64(m.frame)/50.0, 1))
-			color := darken(lerpHex(colDeep, colViolet, t), 0.15+float64(k)*0.22)
-			c[y][x] = mcell{glyphs[k], color}
+			color := darken(lerpHex(colDeep, colViolet, t), 0.12+z*0.5)
+			c[y][x] = mcell{glyphs[k%len(glyphs)], color}
 		}
 	}
-	// Shimmer under the surface: sparse drifting motes.
-	for y := 2; y < h-1; y++ {
+	// Shimmer: sparse drifting motes anywhere on the water.
+	for y := top + 1; y < h-1; y++ {
 		for x := 1; x < w-1; x++ {
-			if y > m.waveY(0, x, h) && c[y][x].ch == ' ' && (x*5+y*11+m.frame/4)%53 == 0 {
+			if c[y][x].ch == ' ' && (x*5+y*11+m.frame/4)%53 == 0 {
 				c[y][x] = mcell{'˙', darken(colDeep, 0.55)}
 			}
 		}
@@ -143,17 +163,65 @@ func activityDim(idle time.Duration, unknown bool) float64 {
 	return (1 - driftSpeed(idle, unknown)/cruiseSpeed) * 0.55
 }
 
-// shipHull picks the hull for a token magnitude: quick errands are dinghies,
+// shipTier grades a token magnitude: quick errands are dinghies,
 // hundred-million-token voyages are capital ships.
-func shipHull(tokens int) []rune {
+func shipTier(tokens int) int {
 	switch {
 	case tokens >= 50_000_000:
-		return []rune{'◢', '▲', '◣'}
+		return 2
 	case tokens >= 1_000_000:
-		return []rune{'▲'}
+		return 1
 	default:
-		return []rune{'▴'}
+		return 0
 	}
+}
+
+var hullByTier = [][]rune{{'▴'}, {'▲'}, {'◢', '▲', '◣'}}
+
+// shipHull picks the hull glyphs for a token magnitude.
+func shipHull(tokens int) []rune {
+	return hullByTier[shipTier(tokens)]
+}
+
+// hullAtDepth applies perspective to the hull: distance shrinks a vessel
+// one tier, and on the horizon line only a hollow silhouette remains.
+func hullAtDepth(tokens int, z float64) []rune {
+	if z > 0.82 {
+		return []rune{'△'}
+	}
+	tier := shipTier(tokens)
+	if z > 0.62 && tier > 0 {
+		tier--
+	}
+	return hullByTier[tier]
+}
+
+// depthOf places a vessel on the z axis: fresh wakes sail the near water,
+// silent sessions recede toward the horizon. Blocked and errored vessels
+// stay pinned near regardless — attention must never fade with distance.
+func depthOf(s fleet.Session, now time.Time) float64 {
+	f := driftSpeed(now.Sub(s.LastActive), s.LastActive.IsZero()) / cruiseSpeed
+	z := 1 - f
+	if s.Status == fleet.StatusNeedsYou || s.Status == fleet.StatusError {
+		z = math.Min(z, 0.12)
+	}
+	// A deterministic lane offset keeps simultaneous actives off one row.
+	lane := float64(hashString(s.ID)%5)/5.0*0.14 - 0.07
+	return clampUnit(z + lane)
+}
+
+// parallax scales on-screen speed by depth: near water slides past the
+// viewer faster than the horizon, even at equal true speed.
+func parallax(z float64) float64 { return 0.45 + 0.55*(1-z) }
+
+func clampUnit(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
 }
 
 // advanceVoyage integrates each vessel's drift phase once per animation
@@ -164,7 +232,8 @@ func (m *Model) advanceVoyage() {
 		if _, ok := m.voyage[s.ID]; !ok {
 			m.voyage[s.ID] = float64(hashString(s.ID) % 4096)
 		}
-		m.voyage[s.ID] += driftSpeed(now.Sub(s.LastActive), s.LastActive.IsZero())
+		v := driftSpeed(now.Sub(s.LastActive), s.LastActive.IsZero())
+		m.voyage[s.ID] += v * parallax(depthOf(s, now))
 	}
 }
 
@@ -177,36 +246,40 @@ func (m Model) paintVessels(c [][]mcell) {
 		return
 	}
 	now := time.Now()
-	speed := func(s fleet.Session) float64 {
-		return driftSpeed(now.Sub(s.LastActive), s.LastActive.IsZero())
-	}
-	// Slow, dim hulls paint first: fresh vessels sail over dormant ones.
-	sort.SliceStable(ships, func(i, j int) bool { return speed(ships[i]) < speed(ships[j]) })
+	// Far, diffuse hulls paint first: near vessels sail over the distance.
+	sort.SliceStable(ships, func(i, j int) bool { return depthOf(ships[i], now) > depthOf(ships[j], now) })
 	left, right := 4, w-legendWidth-6
 	span := maxInt(right-left, 8)
-	for i, s := range ships {
+	for _, s := range ships {
+		z := depthOf(s, now)
 		phase, ok := m.voyage[s.ID]
 		if !ok {
 			phase = float64(hashString(s.ID) % 4096)
 		}
 		x := left + int(math.Mod(phase, float64(span)))
-		bob := int(math.Round(math.Sin(float64(m.frame)/4.0+float64(i)*1.3) * 1.2))
-		y := clampInt(m.waveY(0, x, h)-1+bob, 3, h-3)
-		hull := shipHull(s.Tokens)
+		// Bob softens with distance; phase comes from the ID, not the sort.
+		bobPhase := float64(hashString(s.ID)%628) / 100.0
+		bob := math.Round(math.Sin(float64(m.frame)/4.0+bobPhase) * 1.2 * (0.4 + 0.6*(1-z)))
+		y := clampInt(int(perspectiveRow(z, h)+bob), horizonRow(h)+1, h-3)
+		hull := hullAtDepth(s.Tokens, z)
 		hex := fleet.HexFor(s.Agent)
-		dim := activityDim(now.Sub(s.LastActive), s.LastActive.IsZero())
+		dim := math.Min(activityDim(now.Sub(s.LastActive), s.LastActive.IsZero())+0.30*z, 0.68)
 		for k, r := range hull {
 			if x+k < w-1 {
 				c[y][x+k] = mcell{r, darken(hex, dim)}
 			}
 		}
-		if bow := x + len(hull); bow < w-1 {
-			c[y][bow] = mcell{'▸', darken(hex, 0.3+dim*0.5)}
-		}
-		// The wake trails proportionally to speed: fast vessels tear water.
-		for k := 1; k <= int(speed(s)/cruiseSpeed*4); k++ {
-			if wx := x - k - (m.frame/2+k)%2; wx > 0 && y+1 < h-1 {
-				c[y+1][wx] = mcell{'·', darken(colCyan, 0.25+float64(k)*0.12)}
+		// Definition fades with distance: only near vessels keep their bow
+		// marker and tear a wake in the water.
+		if z <= 0.62 {
+			if bow := x + len(hull); bow < w-1 {
+				c[y][bow] = mcell{'▸', darken(hex, 0.3+dim*0.5)}
+			}
+			v := driftSpeed(now.Sub(s.LastActive), s.LastActive.IsZero())
+			for k := 1; k <= int(v/cruiseSpeed*4); k++ {
+				if wx := x - k - (m.frame/2+k)%2; wx > 0 && y+1 < h-1 {
+					c[y+1][wx] = mcell{'·', darken(colCyan, 0.25+float64(k)*0.12)}
+				}
 			}
 		}
 		mast := x + len(hull)/2
