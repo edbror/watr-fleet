@@ -2,7 +2,7 @@
 
 Texto plano, listo para pegar (sin `>`). Estrategia/comment-kit completo: ver `hn.md`.
 Orden: Show HN (día 1, mañana entre semana US-Eastern) → r/commandline (día 2) → r/golang (día 3).
-Repo = la landing: github.com/edbror/watr-fleet. Honestidad: v0.10.4 pre-release; telemetría profunda hoy = Claude Code, resto vía tmux (dilo de frente).
+Repo = la landing: github.com/edbror/watr-fleet. Honestidad: v0.10.5 pre-release; telemetría profunda hoy = Claude Code, resto vía tmux (dilo de frente).
 
 ═══════════════════════════════════════════
 ## 1 · Show HN  (día 1)
@@ -26,7 +26,7 @@ How it detects agents, honestly: it reads tmux and identifies CLIs by process na
 Try it with nothing running:
 go install github.com/edbror/watr-fleet@latest (or brew install edbror/tap/watr-fleet), then fleet --demo. Plain fleet discovers your real tmux + Claude Code sessions.
 
-It's v0.10.4, pre-release — the detection heuristics are young, and every agent signals "blocked" differently. If you run one Fleet reads wrong, an issue with your agent's actual prompt patterns is the most useful thing you can send. Happy to answer anything about the tmux process-tree walk, the transcript parsing, or the cost model.
+It's v0.10.5, pre-release — the detection heuristics are young, and every agent signals "blocked" differently. If you run one Fleet reads wrong, an issue with your agent's actual prompt patterns is the most useful thing you can send. Happy to answer anything about the tmux process-tree walk, the transcript parsing, or the cost model.
 
 ═══════════════════════════════════════════
 ## 2 · r/commandline  (día 2 — lidera con el GIF)
@@ -42,7 +42,7 @@ go install github.com/edbror/watr-fleet@latest && fleet --demo
 
 github.com/edbror/watr-fleet
 
-v0.10.4, pre-release — detection heuristics are young, issues with your agent's prompt patterns are gold. GIF is the demo mode; keys are j/k, enter, y/n, d, s, q.
+v0.10.5, pre-release — detection heuristics are young, issues with your agent's prompt patterns are gold. GIF is the demo mode; keys are j/k, enter, y/n, d, s, q.
 
 ═══════════════════════════════════════════
 ## 3 · r/golang  (día 3 — técnico, sobre el código)
@@ -60,4 +60,4 @@ The Go bits this sub might care about:
 
 go install github.com/edbror/watr-fleet@latest, then fleet --demo for a simulated fleet (deterministic seed, so it's demoable anywhere). Code: github.com/edbror/watr-fleet
 
-It's v0.10.4 and the detection heuristics are the weakest part — genuinely looking for critique of the process-tree approach and the transcript parsing, and PRs/issues for agents I've mapped wrong. What would you do differently for the "is this session blocked?" signal across heterogeneous CLIs?
+It's v0.10.5 and the detection heuristics are the weakest part — genuinely looking for critique of the process-tree approach and the transcript parsing, and PRs/issues for agents I've mapped wrong. What would you do differently for the "is this session blocked?" signal across heterogeneous CLIs?

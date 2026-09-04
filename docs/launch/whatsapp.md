@@ -17,7 +17,7 @@ Trae modo demo, así que lo pruebas en 5 segundos sin nada corriendo:
   brew install edbror/tap/watr-fleet
   fleet --demo
 
-Está en v0.10.4, pre-release — la detección de cada agente todavía es joven. Si corres uno que Fleet lee mal, un issue con cómo se ve tu agente es justo lo que sirve.
+Está en v0.10.5, pre-release — la detección de cada agente todavía es joven. Si corres uno que Fleet lee mal, un issue con cómo se ve tu agente es justo lo que sirve.
 
 github.com/edbror/watr-fleet
 

@@ -43,7 +43,7 @@ There's also escalation for when you walk away: past a threshold, a blocked sess
 
 ## Honest status
 
-Fleet is **v0.10.4, pre-release.** The core loop works and the demo is real, but the detection heuristics are young — every agent CLI has its own way of signalling "I'm blocked," and we've only mapped some of them. That's exactly where you come in: if you run an agent Fleet reads wrong, an issue with your agent's actual prompt patterns is the single most valuable thing you can send us. Same for a PR.
+Fleet is **v0.10.5, pre-release.** The core loop works and the demo is real, but the detection heuristics are young — every agent CLI has its own way of signalling "I'm blocked," and we've only mapped some of them. That's exactly where you come in: if you run an agent Fleet reads wrong, an issue with your agent's actual prompt patterns is the single most valuable thing you can send us. Same for a PR.
 
 It's open source because a tool that watches *your* fleet should be one you can read, fork, and correct.
 
