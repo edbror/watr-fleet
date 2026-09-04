@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,7 +19,24 @@ import (
 	"github.com/edbror/watr-fleet/internal/ui"
 )
 
+// version is stamped at release time with -ldflags "-X main.version=<tag>".
+var version string
+
+// resolveVersion prefers the release stamp, then the module version the Go
+// toolchain records for `go install ...@latest`, so both install paths report
+// something real instead of an empty string.
+func resolveVersion() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+		return info.Main.Version
+	}
+	return "dev"
+}
+
 func main() {
+	showVersion := flag.Bool("version", false, "print version and exit")
 	demo := flag.Bool("demo", false, "run with a simulated fleet")
 	refresh := flag.Duration("refresh", 800*time.Millisecond, "dashboard refresh interval")
 	seed := flag.Int64("seed", 7, "seed for the demo fleet")
@@ -26,6 +44,13 @@ func main() {
 	hookLogPath := flag.String("hook-log", adapter.DefaultHookLogPath(), "fleet hook events file")
 	configPath := flag.String("config", config.DefaultPath(), "fleet.toml path")
 	flag.Parse()
+
+	// Answer before touching config or tmux: `fleet --version` must work on a
+	// machine where neither is set up yet.
+	if *showVersion {
+		fmt.Println("fleet", resolveVersion())
+		return
+	}
 
 	if *refresh < 200*time.Millisecond {
 		*refresh = 200 * time.Millisecond // floor: protect tmux and CPU from a zero-interval poll loop
