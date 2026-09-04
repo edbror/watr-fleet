@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/edbror/watr-fleet/internal/buildinfo"
 	"github.com/edbror/watr-fleet/internal/fleet"
 )
 
@@ -13,7 +14,9 @@ import (
 // detail card, and a full-width segmented status bar. Hierarchy from
 // color fields and spacing, not from boxing every section.
 
-const version = "v0.10.4"
+// version comes from buildinfo so the header can never drift from
+// what `fleet --version` reports. It did once: v0.10.5 rendered "v0.10.4".
+var version = buildinfo.Version()
 
 const (
 	colAgent = 10 // pill: space + 8 name + space

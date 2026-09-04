@@ -8,32 +8,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime/debug"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/edbror/watr-fleet/internal/adapter"
+	"github.com/edbror/watr-fleet/internal/buildinfo"
 	"github.com/edbror/watr-fleet/internal/config"
 	"github.com/edbror/watr-fleet/internal/fleet"
 	"github.com/edbror/watr-fleet/internal/notify"
 	"github.com/edbror/watr-fleet/internal/ui"
 )
-
-// version is stamped at release time with -ldflags "-X main.version=<tag>".
-var version string
-
-// resolveVersion prefers the release stamp, then the module version the Go
-// toolchain records for `go install ...@latest`, so both install paths report
-// something real instead of an empty string.
-func resolveVersion() string {
-	if version != "" {
-		return version
-	}
-	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
-		return info.Main.Version
-	}
-	return "dev"
-}
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
@@ -48,7 +32,7 @@ func main() {
 	// Answer before touching config or tmux: `fleet --version` must work on a
 	// machine where neither is set up yet.
 	if *showVersion {
-		fmt.Println("fleet", resolveVersion())
+		fmt.Println("fleet", buildinfo.Version())
 		return
 	}
 

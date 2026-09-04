@@ -49,6 +49,8 @@ castiga.
 ## Abierto
 
 - **La fórmula vive en la raíz** del tap, no en `Formula/`. Homebrew lo acepta, pero `raw.githubusercontent.com/edbror/homebrew-tap/main/Formula/watr-fleet.rb` da 404 — si alguien la busca ahí, no la encuentra. Moverla a `Formula/` es cosmético pero gratis.
-- **Falta un frame que explique el producto sin leer:** 1270×760, la cola de bloqueados visible, anotado con algo tipo *"this one has been waiting 4 min"*. Sirve para PH, para LinkedIn y para el README. Es lo más rentable que queda por hacer.
+- ~~Falta un frame que explique el producto sin leer~~ — hecho. `docs/list.png` a 1270×760 con la cola NEEDS YOU poblada; el demo siembra una sesión bloqueada hace 4 minutos, así que el frame se explica solo sin anotarlo.
+- **Las imágenes se regeneran con `docs/tapes/regen.sh <tag>`** (VHS). Hacerlo en cada release: el header de fleet muestra la versión, así que las capturas envejecen solas — `dashboard.png` llevaba mostrando `v0.8`.
+- **`tour.gif` y `launcher.png` siguen viejos.** No tienen tape; el tour necesita decidir qué recorrido enseña. Ninguno se usa en el README ni en la galería, así que no bloquean.
 - **No hay CI en pull requests.** `release.yml` corre solo con tags: nada valida un PR antes del merge. Un workflow de `go test` es media hora y evita taguear un release roto.
 - **Cuenta de Reddit con karma suficiente** para postear en r/commandline y r/golang. Los dos filtran cuentas nuevas.

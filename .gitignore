@@ -2,3 +2,6 @@
 /fleet-*
 dist/
 *.zip
+.DS_Store
+.fleet-still
+docs/tapes/*.gif

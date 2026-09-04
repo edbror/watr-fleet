@@ -53,7 +53,7 @@ Orden importa — PH corta después de la primera imagen en el feed:
 2. `docs/dashboard.png` — la vista con números: tokens, costo, presión de contexto.
 3. `docs/list.png` — la lista de sesiones, lo que ves el 90% del tiempo.
 
-**Falta y conviene:** una imagen 1270×760 con la cola de bloqueados visible y una anotación tipo *"this one has been waiting 4 min"*. Es el único frame que explica el producto sin leer. Si hay tiempo antes de PH, es lo más rentable que puedes hacer.
+**Ya resuelto:** `docs/list.png` sale a 1270×760 con la banda NEEDS YOU poblada y los tiempos de espera visibles — el demo siembra una sesión bloqueada hace 4 minutos, así que el frame se explica solo sin anotarlo. Regenéralo con `docs/tapes/regen.sh` antes de cada release: el header muestra la versión.
 
 ---
 
