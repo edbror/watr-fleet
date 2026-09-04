@@ -66,4 +66,4 @@ Copy `fleet.example.toml` to `~/.config/fleet/fleet.toml`: custom agents and col
 
 ## Status
 
-v0.10.4 — pre-release. Detection heuristics are young; issues and PRs with your agent's prompt patterns are the most valuable contribution you can make.
+v0.10.5 — pre-release. Detection heuristics are young; issues and PRs with your agent's prompt patterns are the most valuable contribution you can make.

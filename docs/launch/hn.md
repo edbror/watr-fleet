@@ -5,7 +5,7 @@
 **Destination:** `github.com/edbror/watr-fleet`
 **The asset:** a short loop of `fleet --demo` running — the attention queue reordering, the dashboard (`d`) with token flow and context pressure. That GIF is what makes people run one command.
 
-> Honesty line, lead with it everywhere: **v0.10.4, pre-release.** Deep telemetry (real tokens/cost/context pressure) is richest for Claude Code today via its on-disk transcripts; the other 24+ CLIs are detected via tmux (presence + activity) with richer per-agent telemetry on the roadmap. Say that plainly — this crowd rewards it and punishes the opposite.
+> Honesty line, lead with it everywhere: **v0.10.5, pre-release.** Deep telemetry (real tokens/cost/context pressure) is richest for Claude Code today via its on-disk transcripts; the other 24+ CLIs are detected via tmux (presence + activity) with richer per-agent telemetry on the roadmap. Say that plainly — this crowd rewards it and punishes the opposite.
 
 ---
 
@@ -62,7 +62,7 @@ Skip r/programming (removes almost all self-promo) and the AI hype subs (they'll
 > Try it with nothing running:
 > `go install github.com/edbror/watr-fleet@latest` (or `brew install edbror/tap/watr-fleet`), then `fleet --demo`. Plain `fleet` discovers your real tmux + Claude Code sessions.
 >
-> It's v0.10.4, pre-release — the detection heuristics are young, and every agent signals "blocked" differently. If you run one Fleet reads wrong, an issue with your agent's actual prompt patterns is the most useful thing you can send. Happy to answer anything about the tmux process-tree walk, the transcript parsing, or the cost model.
+> It's v0.10.5, pre-release — the detection heuristics are young, and every agent signals "blocked" differently. If you run one Fleet reads wrong, an issue with your agent's actual prompt patterns is the most useful thing you can send. Happy to answer anything about the tmux process-tree walk, the transcript parsing, or the cost model.
 
 ---
 
@@ -78,7 +78,7 @@ Skip r/programming (removes almost all self-promo) and the AI hype subs (they'll
 >
 > **github.com/edbror/watr-fleet**
 >
-> v0.10.4, pre-release — detection heuristics are young, issues with your agent's prompt patterns are gold. GIF is the demo mode; keys are j/k, enter, y/n, d, s, q.
+> v0.10.5, pre-release — detection heuristics are young, issues with your agent's prompt patterns are gold. GIF is the demo mode; keys are j/k, enter, y/n, d, s, q.
 
 ---
 
@@ -96,7 +96,7 @@ Skip r/programming (removes almost all self-promo) and the AI hype subs (they'll
 >
 > `go install github.com/edbror/watr-fleet@latest`, then `fleet --demo` for a simulated fleet (deterministic seed, so it's demoable anywhere). Code: **github.com/edbror/watr-fleet**
 >
-> It's v0.10.4 and the detection heuristics are the weakest part — genuinely looking for critique of the process-tree approach and the transcript parsing, and PRs/issues for agents I've mapped wrong. What would you do differently for the "is this session blocked?" signal across heterogeneous CLIs?
+> It's v0.10.5 and the detection heuristics are the weakest part — genuinely looking for critique of the process-tree approach and the transcript parsing, and PRs/issues for agents I've mapped wrong. What would you do differently for the "is this session blocked?" signal across heterogeneous CLIs?
 
 ---
 
