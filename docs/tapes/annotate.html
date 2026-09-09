@@ -1,0 +1,37 @@
+<!-- Overlay de anotacion sobre docs/list.png -> docs/list-annotated.png (1270x760, galeria PH).
+     La base envejece con cada release (el header muestra la version), asi que:
+     1) regenera docs/list.png con docs/tapes/regen.sh
+     2) sirve esta carpeta (python3 -m http.server 8791) con list.png junto a este html como base.png
+     3) screenshot del elemento .wrap a escala css (1x) -> 1270x760 exactos. -->
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{width:1270px;height:760px;overflow:hidden;background:#11111b}
+  .wrap{position:relative;width:1270px;height:760px}
+  img{width:1270px;height:760px;display:block}
+  .ring{position:absolute;left:40px;top:145px;width:1198px;height:70px;
+        border:2px solid #F5B342;border-radius:8px;
+        box-shadow:0 0 0 4px rgba(245,179,66,.18), 0 0 22px rgba(245,179,66,.35);}
+  .lab{position:absolute;left:690px;top:156px;width:530px;
+       font-family:Inter,system-ui,sans-serif;color:#F5B342;}
+  .lab .l1{font-size:19px;font-weight:700;letter-spacing:-.2px;line-height:1.25}
+  .lab .l2{font-size:15px;font-weight:500;color:#D7C9A8;margin-top:4px;line-height:1.3}
+  .cap{position:absolute;left:40px;top:676px;width:1198px;
+       font-family:Inter,system-ui,sans-serif;text-align:center}
+  .cap .big{font-size:20px;font-weight:700;color:#E8EAF2;letter-spacing:-.2px}
+  .cap .sm{font-size:15px;font-weight:500;color:#8B92A8;margin-top:6px}
+  .cap .big b{color:#F5B342}
+</style>
+<div class="wrap">
+  <img src="base.png">
+  <div class="ring"></div>
+  <div class="lab">
+    <div class="l1">← blocked 4 minutes on a y/n</div>
+    <div class="l2">The other 8 agents kept burning tokens the whole time.</div>
+  </div>
+  <div class="cap">
+    <div class="big">One queue for <b>every agent that's waiting on you</b> — longest first.</div>
+    <div class="sm">Answer y/N right here. No hunting through tmux panes.</div>
+  </div>
+</div>
