@@ -81,7 +81,7 @@ You can try it with nothing running:
 
 Go + Bubble Tea + Lip Gloss, MIT, single static binary.
 
-It's v0.10.5 and pre-release. The detection heuristics are the young part — every agent signals "I'm blocked" differently. If you run one Fleet reads wrong, an issue describing your agent's actual prompt patterns is the most useful thing you can send me.
+It's v0.10.6 and pre-release. The detection heuristics are the young part — every agent signals "I'm blocked" differently. If you run one Fleet reads wrong, an issue describing your agent's actual prompt patterns is the most useful thing you can send me.
 ```
 
 ---

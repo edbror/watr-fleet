@@ -25,7 +25,7 @@ Es open source, MIT, un binario. Lo pruebas en cinco segundos con modo demo, sin
 
 Lo interesante no es la herramienta. Es lo que implica: si ya estás delegando trabajo real a varias IAs en paralelo, necesitas los mismos instrumentos que cualquier operación con varios trabajadores — saber quién está bloqueado, quién avanza, y cuánto cuesta la hora. Eso apenas empieza a existir.
 
-Está en v0.10.5, pre-release. La parte que menos confío es la detección: cada agente avisa que está bloqueado a su manera. Si corres uno que Fleet lee mal, dímelo — eso es justo lo que necesito.
+Está en v0.10.6, pre-release. La parte que menos confío es la detección: cada agente avisa que está bloqueado a su manera. Si corres uno que Fleet lee mal, dímelo — eso es justo lo que necesito.
 
 Link en comentarios.
 ```
@@ -56,7 +56,7 @@ Open source, MIT, single binary. Demo mode runs in five seconds with nothing els
 
 The tool isn't the interesting part. This is: if you're delegating real work to several AIs at once, you need the same instruments as any operation with multiple workers — who's blocked, who's moving, what the hour costs. That barely exists yet.
 
-v0.10.5, pre-release. The part I trust least is detection: every agent signals "blocked" differently. If you run one Fleet reads wrong, tell me — that's exactly what I need.
+v0.10.6, pre-release. The part I trust least is detection: every agent signals "blocked" differently. If you run one Fleet reads wrong, tell me — that's exactly what I need.
 
 Link in comments.
 ```

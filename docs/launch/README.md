@@ -32,7 +32,7 @@ de semana. Martes a jueves por la mañana es la ventana.
 
 ## Línea de honestidad — va en todos lados
 
-**v0.10.5, pre-release.** La telemetría profunda (tokens, costo y presión de
+**v0.10.6, pre-release.** La telemetría profunda (tokens, costo y presión de
 contexto reales) hoy sale de Claude Code, porque sus transcripts están en disco
 y se pueden parsear. Los otros 24+ CLIs se detectan por tmux: presencia y
 actividad. Decirlo de frente gana más de lo que cuesta, y en HN lo contrario se
