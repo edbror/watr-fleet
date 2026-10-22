@@ -3,6 +3,7 @@ package adapter
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -170,4 +171,28 @@ func TestRutaDeSubagente(t *testing.T) {
 	if got := parentTranscript(sub); got != "/r/-proj/abc-123.jsonl" {
 		t.Errorf("padre = %q", got)
 	}
+}
+
+// Dos polls encimados sobre la misma fuente, que es lo que pasa cuando una
+// pasada tarda más que el intervalo de refresco. Sin candado esto escribe el
+// mismo mapa de caché desde dos goroutines, y el runtime lo mata con
+// "concurrent map writes". Corre con -race para ver la carrera.
+func TestSnapshotsEncimadosNoChocan(t *testing.T) {
+	root := writeFixture(t, fixtureTranscript)
+	src := NewClaudeSource(root, nil)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				if _, err := src.Snapshot(); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }

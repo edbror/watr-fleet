@@ -65,6 +65,7 @@ type Model struct {
 	launcher    *launcher // non-nil while the launch card is open
 	confirmKill string    // target awaiting a second 'x' press
 	monitor     bool      // 'm' toggles the ambient sci-fi monitor view
+	loading     bool      // a snapshot is in flight; don't start another
 }
 
 // WithNotifier enables out-of-terminal escalation for blocked sessions.
@@ -82,6 +83,7 @@ func NewModel(source adapter.Source, refresh time.Duration) Model {
 		activity:   map[string][]int{},
 		voyage:     map[string]float64{},
 		notified:   map[string]bool{},
+		loading:    true, // Init fires the first snapshot
 	}
 }
 
@@ -111,6 +113,21 @@ func (m Model) dataTick() tea.Cmd {
 	return tea.Tick(m.refresh, func(t time.Time) tea.Msg { return dataTickMsg(t) })
 }
 
+// snapshotCmd asks for a poll unless one is already in flight.
+//
+// A pass over a large transcript tree takes seconds while the tick comes
+// every 800ms, so without this the ticks pile up: several goroutines inside
+// the same source at once, writing the same cache map. That took fleet down
+// with a runtime "concurrent map writes". A source that hangs now stalls the
+// readings instead, which is the better of the two failures.
+func (m *Model) snapshotCmd() tea.Cmd {
+	if m.loading {
+		return nil
+	}
+	m.loading = true
+	return m.takeSnapshot
+}
+
 func (m Model) takeSnapshot() tea.Msg {
 	sessions, err := m.source.Snapshot()
 	return snapshotMsg{sessions: sessions, err: err}
@@ -131,8 +148,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.animTick()
 	case dataTickMsg:
-		return m, tea.Batch(m.takeSnapshot, m.dataTick())
+		return m, tea.Batch(m.snapshotCmd(), m.dataTick())
 	case snapshotMsg:
+		m.loading = false
 		m.err = msg.err
 		if msg.err == nil {
 			m.sessions = msg.sessions
@@ -151,7 +169,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.flash = "⚓ launched " + string(msg.agent)
 		}
 		m.flashFrames = 40
-		return m, m.takeSnapshot
+		return m, m.snapshotCmd()
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -323,7 +341,7 @@ func (m Model) killSelected() (tea.Model, tea.Cmd) {
 		m.flash = "⚓ sank " + s.Project
 	}
 	m.flashFrames = 40
-	return m, m.takeSnapshot
+	return m, m.snapshotCmd()
 }
 
 // jumpToSelected brings the user to the session: inside tmux it switches
