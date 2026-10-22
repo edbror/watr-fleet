@@ -223,7 +223,13 @@ func absorb(sum *transcriptSummary, entry transcriptEntry) {
 			sum.totals.OutputTokens += u.OutputTokens
 			sum.totals.CacheReadTokens += u.CacheReadTokens
 			sum.totals.CacheCreationTokens += u.CacheCreationTokens
-			sum.lastUsage = *u
+			// Una entrada <synthetic> (error de API, "Prompt is too long")
+			// trae el usage en ceros. Tomarla como la última lectura vacía el
+			// medidor de contexto justo cuando el contexto está más lleno, así
+			// que sólo una medición real reemplaza a la anterior.
+			if u.contextSize() > 0 {
+				sum.lastUsage = *u
+			}
 			sum.cost += u.costUSD(sum.model)
 		}
 		sum.lastEvent, sum.pendingTool = describeAssistant(entry.Message.Content)
