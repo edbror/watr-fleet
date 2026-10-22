@@ -119,3 +119,55 @@ func TestTranscriptCacheReusesUnchangedFiles(t *testing.T) {
 		t.Error("cached pass diverged from fresh pass")
 	}
 }
+
+const fixtureSubagente = `{"type":"assistant","sessionId":"abc-123","cwd":"/home/ed/watr-launchpad","message":{"model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":300,"cache_creation_input_tokens":40},"content":[{"type":"text","text":"buscando"}]}}
+`
+
+// Un Task escribe su propio transcript en <session-id>/subagents/, y ese
+// archivo lleva el sessionId del PADRE. Como fila aparte, la misma sesión sale
+// varias veces; tirado a la basura, el costo de delegar se pierde. Va sumado.
+func TestSubagenteSumaAlPadreYNoAbreFila(t *testing.T) {
+	root := writeFixture(t, fixtureTranscript)
+	dir := filepath.Join(root, "-home-ed-watr-launchpad", "abc-123", "subagents")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, nombre := range []string{"agent-aaa.jsonl", "agent-bbb.jsonl"} {
+		if err := os.WriteFile(filepath.Join(dir, nombre), []byte(fixtureSubagente), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sessions, err := NewClaudeSource(root, nil).Snapshot()
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("filas = %d, se esperaba 1: los subagentes abrieron fila propia", len(sessions))
+	}
+	// el padre trae 93500, y cada subagente 370
+	if want := 1000 + 500 + 90000 + 2000 + 2*(10+20+300+40); sessions[0].Tokens != want {
+		t.Errorf("tokens = %d, se esperaba %d", sessions[0].Tokens, want)
+	}
+	soloPadre := 1000*3.0/1e6 + 500*15.0/1e6 + 90000*0.30/1e6 + 2000*3.75/1e6
+	if sessions[0].CostUSD <= soloPadre {
+		t.Errorf("costo = %f, tenía que subir por encima de %f", sessions[0].CostUSD, soloPadre)
+	}
+	// el contexto es el del padre, no el del último subagente que corrió
+	if sessions[0].ContextPct <= 0.4 || sessions[0].ContextPct >= 0.5 {
+		t.Errorf("contextPct = %f, se esperaba el del padre (~0.4675)", sessions[0].ContextPct)
+	}
+}
+
+func TestRutaDeSubagente(t *testing.T) {
+	sub := "/r/-proj/abc-123/subagents/agent-x.jsonl"
+	if !subagentTranscript(sub) {
+		t.Error("no reconoció el transcript de subagente")
+	}
+	if subagentTranscript("/r/-proj/abc-123.jsonl") {
+		t.Error("tomó el transcript del padre por uno de subagente")
+	}
+	if got := parentTranscript(sub); got != "/r/-proj/abc-123.jsonl" {
+		t.Errorf("padre = %q", got)
+	}
+}

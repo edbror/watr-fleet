@@ -60,13 +60,77 @@ func (c *claudeSource) Snapshot() ([]fleet.Session, error) {
 	}
 	c.pruneCache(transcripts)
 	blocked := c.hooks.blockedMap() // one pass over the events file per poll
+	delegated := c.subagentTotals(transcripts)
 	var sessions []fleet.Session
 	for _, path := range transcripts {
-		if s, ok := c.sessionFromTranscript(path, blocked); ok {
-			sessions = append(sessions, s)
+		if subagentTranscript(path) {
+			continue // already folded into the session that launched it
 		}
+		s, ok := c.sessionFromTranscript(path, blocked)
+		if !ok {
+			continue
+		}
+		if d, ok := delegated[path]; ok {
+			s.Tokens += d.tokens
+			s.CostUSD += d.cost
+		}
+		sessions = append(sessions, s)
 	}
 	return sessions, nil
+}
+
+// delegatedSpend is what a session spent inside the subagents it launched.
+type delegatedSpend struct {
+	tokens int
+	cost   float64
+}
+
+// subagentTranscript reports whether a path is a Task's own transcript.
+// Claude Code writes those to <project>/<session-id>/subagents/agent-*.jsonl.
+func subagentTranscript(path string) bool {
+	return filepath.Base(filepath.Dir(path)) == "subagents"
+}
+
+// parentTranscript maps a Task transcript back to the session that launched
+// it: <...>/<session-id>/subagents/agent-x.jsonl -> <...>/<session-id>.jsonl
+func parentTranscript(path string) string {
+	return filepath.Dir(filepath.Dir(path)) + ".jsonl"
+}
+
+// subagentTotals adds up each session's Task transcripts.
+//
+// Those files carry the PARENT's sessionId, so as rows of their own they show
+// one session several times over: a session with four Tasks in flight filled
+// five rows, all with the same id. Their tokens are not in the parent's usage
+// either (no sidechain entry appears in the parent file, and no subagent entry
+// is repeated there), so dropping them would understate what a session that
+// delegates really spent. A Task whose parent aged out of the lookback window
+// has no row to land on and its spend is left out.
+//
+// A file that cannot be read is skipped rather than returned as an error, the
+// same stance as sessionFromTranscript and the walk in recentTranscripts: this
+// source polls, and one unreadable transcript must not blank the whole roster.
+func (c *claudeSource) subagentTotals(paths []string) map[string]delegatedSpend {
+	totals := map[string]delegatedSpend{}
+	for _, path := range paths {
+		if !subagentTranscript(path) {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		sum, ok := c.summarize(path, info)
+		if !ok {
+			continue
+		}
+		parent := parentTranscript(path)
+		t := totals[parent]
+		t.tokens += sum.totals.total()
+		t.cost += sum.cost
+		totals[parent] = t
+	}
+	return totals
 }
 
 // pruneCache drops cached parses for transcripts that aged out of the
