@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/edbror/watr-fleet/internal/fleet"
@@ -20,6 +21,7 @@ type claudeSource struct {
 	hooks      *hookLog      // optional precise signals from Claude Code hooks
 	lookback   time.Duration // ignore transcripts older than this
 	contextMax int           // assumed context window size in tokens
+	mu         sync.Mutex    // the cache is shared by whoever calls Snapshot
 	cache      map[string]cachedTranscript
 }
 
@@ -54,6 +56,11 @@ func DefaultClaudeRoot() string {
 func (c *claudeSource) Name() string { return "claude-code" }
 
 func (c *claudeSource) Snapshot() ([]fleet.Session, error) {
+	// One caller at a time: the parsed-transcript cache is plain maps, and two
+	// overlapping polls writing them is a runtime fatal error, not a race you
+	// get to recover from.
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	transcripts, err := c.recentTranscripts()
 	if err != nil {
 		return nil, err

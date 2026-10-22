@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/edbror/watr-fleet/internal/fleet"
@@ -15,6 +16,7 @@ import (
 // the discovery layer; richer sources (Claude Code transcripts, hooks)
 // enrich its sessions through multiSource.
 type tmuxSource struct {
+	mu            sync.Mutex
 	needsYouSince map[string]time.Time    // target -> first time we saw it blocked
 	activity      map[string]paneActivity // target -> content-change tracking
 }
@@ -48,6 +50,10 @@ func (t *tmuxSource) Name() string { return "tmux" }
 const paneFormat = "#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_pid}"
 
 func (t *tmuxSource) Snapshot() ([]fleet.Session, error) {
+	// Same reason as the Claude source: needsYouSince and activity are plain
+	// maps shared by every poll.
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	out, err := exec.Command("tmux", "list-panes", "-a", "-F", paneFormat).Output()
 	if err != nil {
 		return nil, fmt.Errorf("listing tmux panes: %w", err)
