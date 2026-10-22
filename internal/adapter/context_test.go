@@ -17,3 +17,26 @@ func TestContextWindowDetectsLongContext(t *testing.T) {
 		t.Errorf("window(120k) = %d, want 200k", got)
 	}
 }
+
+// Un <synthetic> ("API Error…", "Prompt is too long") llega con el usage en
+// ceros. Si cuenta como la última lectura, el medidor se vacía justo cuando
+// el contexto está desbordado, que es cuando más importa verlo.
+func TestSyntheticNoVaciaElContexto(t *testing.T) {
+	var sum transcriptSummary
+	real := transcriptEntry{Type: "assistant"}
+	real.Message.Model = "claude-opus-4-8"
+	real.Message.Usage = &tokenUsage{InputTokens: 1_200, CacheReadTokens: 286_343}
+	absorb(&sum, real)
+
+	sintetico := transcriptEntry{Type: "assistant"}
+	sintetico.Message.Model = "<synthetic>"
+	sintetico.Message.Usage = &tokenUsage{}
+	absorb(&sum, sintetico)
+
+	if got := sum.lastUsage.contextSize(); got != 287_543 {
+		t.Errorf("contexto tras el sintético = %d, se esperaba 287543", got)
+	}
+	if got := sum.totals.total(); got != 287_543 {
+		t.Errorf("totales = %d, se esperaba 287543", got)
+	}
+}
