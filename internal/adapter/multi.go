@@ -1,6 +1,9 @@
 package adapter
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/edbror/watr-fleet/internal/fleet"
 )
 
@@ -31,8 +34,8 @@ func (m *multiSource) Name() string {
 
 func (m *multiSource) Snapshot() ([]fleet.Session, error) {
 	var merged []fleet.Session
-	sourceOf := []int{}       // parallel to merged: which source produced it
-	byDir := map[string]int{} // Dir -> index in merged
+	sourceOf := []int{}  // parallel to merged: which source produced it
+	enriched := []bool{} // parallel to merged: already took another source's reading
 	var firstErr error
 	for srcIdx, source := range m.sources {
 		sessions, err := source.Snapshot()
@@ -43,17 +46,14 @@ func (m *multiSource) Snapshot() ([]fleet.Session, error) {
 			continue
 		}
 		for _, s := range sessions {
-			// Merge only ACROSS sources: two panes in the same directory
-			// from the SAME source are distinct sessions, not one.
-			if i, seen := byDir[s.Dir]; seen && s.Dir != "" && sourceOf[i] != srcIdx {
+			if i := rowFor(merged, sourceOf, enriched, srcIdx, s.Dir); i >= 0 {
 				merged[i] = enrich(merged[i], s)
+				enriched[i] = true
 				continue
 			}
 			merged = append(merged, s)
 			sourceOf = append(sourceOf, srcIdx)
-			if s.Dir != "" {
-				byDir[s.Dir] = len(merged) - 1
-			}
+			enriched = append(enriched, false)
 		}
 	}
 	// All sources failing is an error; partial data is a working fleet.
@@ -61,6 +61,48 @@ func (m *multiSource) Snapshot() ([]fleet.Session, error) {
 		return nil, firstErr
 	}
 	return merged, nil
+}
+
+// rowFor finds the row a session belongs to, or -1 when it opens its own.
+//
+// The two sources do not report the same directory: a tmux pane reports the
+// shell's cwd, fixed since launch, while a transcript reports the agent's,
+// which follows every cd the agent makes. Keying on equality alone split one
+// session into two rows the moment an agent stepped into a subdirectory: the
+// pane kept the jump target with its telemetry at zero, and the transcript
+// kept the numbers with nowhere to jump. So an exact match comes first, and
+// failing that the deepest row whose directory contains this one.
+//
+// Two rules keep that from over-merging. Rows from the same source never
+// merge, because two panes in one tree are two sessions. And a row that
+// already took a reading is skipped, so a second transcript under the same
+// pane opens its own row instead of overwriting the first one's numbers.
+//
+// ponytail: linear scan, a fleet is tens of rows; index by directory if one
+// ever reaches thousands.
+func rowFor(merged []fleet.Session, sourceOf []int, enriched []bool, srcIdx int, dir string) int {
+	if dir == "" {
+		return -1
+	}
+	best, bestLen := -1, -1
+	for i, s := range merged {
+		if sourceOf[i] == srcIdx || enriched[i] || s.Dir == "" {
+			continue
+		}
+		if s.Dir == dir {
+			return i // nothing beats an exact match
+		}
+		if len(s.Dir) > bestLen && under(dir, s.Dir) {
+			best, bestLen = i, len(s.Dir)
+		}
+	}
+	return best
+}
+
+// under reports whether dir sits inside parent.
+func under(dir, parent string) bool {
+	rel, err := filepath.Rel(parent, dir)
+	return err == nil && rel != "." && !strings.HasPrefix(rel, "..")
 }
 
 // enrich merges a richer reading of the same session into the base row.
