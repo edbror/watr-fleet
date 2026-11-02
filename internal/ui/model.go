@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"sort"
@@ -178,6 +179,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // answerFlash reports what actually happened — never a fake success.
 func answerFlash(r answerResultMsg) string {
+	// The pane was reachable; we chose not to type into it. Saying
+	// "couldn't reach" here would send the user looking for a network
+	// problem that isn't there.
+	if errors.Is(r.err, ErrPuertaDeConfianza) {
+		return "⚠ " + r.project + " is on the folder trust screen — open it and answer there"
+	}
 	if r.err != nil {
 		return "⚠ couldn't reach " + r.project
 	}
