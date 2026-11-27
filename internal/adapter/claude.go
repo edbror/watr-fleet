@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,12 +26,15 @@ type claudeSource struct {
 	cache      map[string]cachedTranscript
 }
 
-// cachedTranscript avoids reparsing unchanged transcripts every poll —
-// large sessions would otherwise burn CPU on every refresh tick.
+// cachedTranscript avoids reparsing unchanged transcripts every poll, and
+// remembers how far the last pass got: transcripts are append-only JSONL,
+// so a changed file usually means a few new lines on the end, not a new
+// file. Rereading a 200MB session on every tick is what melts a laptop.
 type cachedTranscript struct {
-	mtime time.Time
-	size  int64
-	sum   transcriptSummary
+	mtime  time.Time
+	size   int64
+	offset int64 // bytes of complete lines already folded into sum
+	sum    transcriptSummary
 }
 
 // NewClaudeSource builds the Claude Code transcript adapter.
@@ -247,9 +251,13 @@ func (c *claudeSource) contextWindow(size int) int {
 }
 
 // summarize parses a transcript, reusing the cached pass when the file
-// has not changed since the last poll.
+// has not changed — and continuing from the cached offset when it only
+// grew. The summary is a left fold over lines, so absorbing just the new
+// tail is exactly equivalent to reparsing the whole file. A file that
+// shrank was rewritten: start over from byte zero.
 func (c *claudeSource) summarize(path string, info os.FileInfo) (transcriptSummary, bool) {
-	if hit, ok := c.cache[path]; ok && hit.mtime.Equal(info.ModTime()) && hit.size == info.Size() {
+	hit, cached := c.cache[path]
+	if cached && hit.mtime.Equal(info.ModTime()) && hit.size == info.Size() {
 		return hit.sum, true
 	}
 	file, err := os.Open(path)
@@ -257,23 +265,50 @@ func (c *claudeSource) summarize(path string, info os.FileInfo) (transcriptSumma
 		return transcriptSummary{}, false
 	}
 	defer file.Close()
-	sum := summarizeTranscript(file)
-	c.cache[path] = cachedTranscript{mtime: info.ModTime(), size: info.Size(), sum: sum}
+
+	var sum transcriptSummary
+	var offset int64
+	if cached && hit.offset > 0 && info.Size() >= hit.size {
+		if _, err := file.Seek(hit.offset, io.SeekStart); err == nil {
+			sum, offset = hit.sum, hit.offset
+		}
+	}
+	offset += absorbLines(file, &sum)
+	c.cache[path] = cachedTranscript{mtime: info.ModTime(), size: info.Size(), offset: offset, sum: sum}
 	return sum, true
 }
 
 func summarizeTranscript(file *os.File) transcriptSummary {
 	var sum transcriptSummary
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 1024*1024), 8*1024*1024)
-	for scanner.Scan() {
+	absorbLines(file, &sum)
+	return sum
+}
+
+// absorbLines folds every complete line from r into sum and returns how
+// many bytes it consumed. A trailing line without a newline is a write
+// caught mid-flight: it is absorbed only if it already parses as JSON
+// (then it was whole, just unterminated); otherwise its bytes are left
+// uncounted so the next poll rereads it once it is finished.
+func absorbLines(r io.Reader, sum *transcriptSummary) int64 {
+	reader := bufio.NewReaderSize(r, 1024*1024)
+	var consumed int64
+	for {
+		line, err := reader.ReadBytes('\n')
 		var entry transcriptEntry
-		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+		parsed := json.Unmarshal(line, &entry) == nil
+		if err == nil {
+			consumed += int64(len(line))
+			if parsed {
+				absorb(sum, entry)
+			}
 			continue
 		}
-		absorb(&sum, entry)
+		if len(line) > 0 && parsed { // whole JSON, missing only its newline
+			consumed += int64(len(line))
+			absorb(sum, entry)
+		}
+		return consumed
 	}
-	return sum
 }
 
 // absorb folds one transcript entry into the running summary.
